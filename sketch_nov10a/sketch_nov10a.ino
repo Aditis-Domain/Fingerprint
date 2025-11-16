@@ -23,6 +23,13 @@
  *   RESET_VOTES -> Pin 1 (NEW - Hold to reset vote counts only)
  * 
  * Note: Pin 1 is TX pin. If you need Serial Monitor, use Pin 4 instead.
+ * 
+ * FUNCTIONALITY:
+ * This sketch implements a fingerprint-based voting system using an R307 fingerprint sensor.
+ * Users can enroll their fingerprints, vote for one of three candidates, and view voting results.
+ * The system uses an LCD display for user interface and EEPROM to store fingerprint data and vote counts.
+ * Includes features for managing fingerprints (enrollment/deletion), voting with verification, and resetting vote counts.
+ * 
  */
 
 #include <SoftwareSerial.h>
