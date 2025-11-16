@@ -76,6 +76,15 @@ uint8_t packet[128];
 int totalFingerprints = 0;
 int vote1 = 0, vote2 = 0, vote3 = 0;
 
+/**
+ * setup() - Initialize the Arduino system
+ * 
+ * Purpose: Initializes all hardware components including the LCD display, fingerprint sensor,
+ * button inputs, and EEPROM data. Verifies sensor communication and loads previously stored
+ * voting data. Displays startup screen and tests fingerprint sensor connectivity.
+ * 
+ * Usage: Called once at Arduino startup before entering the main loop.
+ */
 void setup() {
   Serial.begin(9600);
   
@@ -157,6 +166,18 @@ void setup() {
   showMainMenu();
 }
 
+  }
+}
+
+/**
+ * loop() - Main event loop handling all user input
+ * 
+ * Purpose: Continuously monitors all button inputs and dispatches appropriate actions.
+ * Handles enrollment, deletion, voting, results display, and vote reset functionality.
+ * Implements debouncing to avoid false triggers from button presses.
+ * 
+ * Usage: Runs repeatedly after setup() completes, forever during Arduino operation.
+ */
 void loop() {
   if (digitalRead(BTN_ENROLL) == LOW) {
     delay(200);
@@ -237,8 +258,18 @@ void showMainMenu() {
   lcd.setCursor(0, 1);
   lcd.print("E-D-V-R Ready");
 }
-
 // FIXED FUNCTION: Reset only vote counts, keep fingerprints
+/**
+ * resetVotesOnly() - Reset all vote counts to zero while preserving enrolled fingerprints
+ * 
+ * Purpose: Clears the voting data (vote counts for all candidates and "has voted" flags)
+ * while maintaining the fingerprint database. Allows users to vote again without re-enrollment.
+ * Displays progress messages to the user during reset process.
+ * 
+ * Usage: Called when user holds the RESET_VOTES button for 3 seconds. Used to conduct
+ * multiple rounds of voting with the same fingerprint database.
+ * Parameters: None
+ */
 void resetVotesOnly() {
   lcd.clear();
   lcd.print("Resetting Votes");
@@ -280,6 +311,17 @@ void resetVotesOnly() {
   delay(2500);
 }
 
+/**
+ * resetSystem() - Perform a complete system reset
+ * 
+ * Purpose: Clears all data including vote counts, voted flags, and EEPROM storage.
+ * Resets the system to factory default state. Used during startup if RESULTS button
+ * is held for full reset, or as needed to completely clear all voting records.
+ * 
+ * Usage: Called during Arduino startup if RESULTS button held, or invoked manually
+ * when complete system reset is required.
+ * Parameters: None
+ */
 void resetSystem() {
   lcd.clear();
   lcd.print("System Reset");
@@ -306,6 +348,17 @@ void resetSystem() {
   delay(2000);
 }
 
+/**
+ * verifyAndVote() - Verify fingerprint against database and facilitate voting
+ * 
+ * Purpose: Prompts user to place finger on sensor, captures fingerprint image,
+ * converts to template, searches database for match. If match found and user hasn't
+ * voted yet, allows them to select a candidate to vote for. Provides feedback
+ * about verification success/failure.
+ * 
+ * Usage: Called when user presses VOTE button. Handles entire voting workflow.
+ * Parameters: None
+ */
 void verifyAndVote() {
   lcd.clear();
   lcd.print("Place finger");
@@ -421,6 +474,16 @@ void verifyAndVote() {
   }
 }
 
+/**
+ * castVote() - Display voting options and record vote selection
+ * 
+ * Purpose: Shows the three candidate buttons and waits for user selection.
+ * Records the selected vote to EEPROM, marks the voter as having voted,
+ * and displays confirmation. Has 15-second timeout if no candidate selected.
+ * 
+ * Usage: Called from verifyAndVote() after fingerprint successfully verified.
+ * Parameters: voterID (int) - The ID of the verified voter casting the vote
+ */
 void castVote(int voterID) {
   lcd.clear();
   lcd.print("Vote:");
@@ -488,6 +551,16 @@ void castVote(int voterID) {
   delay(2000);
 }
 
+/**
+ * markAsVoted() - Mark a voter ID as having already voted
+ * 
+ * Purpose: Sets a flag in EEPROM for the given voter ID to prevent duplicate voting.
+ * Uses the high bit (0x80) of the ID storage to mark the voted status while keeping
+ * the ID intact in the lower 7 bits.
+ * 
+ * Usage: Called from castVote() after vote is successfully recorded.
+ * Parameters: id (int) - The voter ID to mark as voted
+ */
 void markAsVoted(int id) {
   // Mark this ID as having voted by setting high bit
   for (int i = 0; i < MAX_FINGERPRINTS; i++) {
@@ -499,6 +572,16 @@ void markAsVoted(int id) {
   }
 }
 
+/**
+ * showResults() - Display voting results and determine winner
+ * 
+ * Purpose: Shows vote count for each candidate on LCD display, calculates total votes,
+ * determines and displays the winner or indicates if there's a tie. Also outputs
+ * results to Serial monitor for monitoring. Displays for several seconds before returning.
+ * 
+ * Usage: Called when user presses RESULTS button from main menu.
+ * Parameters: None
+ */
 void showResults() {
   lcd.clear();
   lcd.print("Results:");
@@ -564,6 +647,18 @@ void showResults() {
   delay(4000);
 }
 
+/**
+ * enrollFingerprint() - Enroll a new fingerprint to the sensor database
+ * 
+ * Purpose: Allows user to select an ID, captures two fingerprint images (requiring
+ * the same finger to be placed twice), creates a template, and stores it in the
+ * fingerprint sensor. Includes validation of image quality and template creation.
+ * Tracks the enrolled ID in EEPROM as "not voted".
+ * 
+ * Usage: Called when user presses ENROLL button from main menu. Handles complete
+ * enrollment workflow including ID selection, image capture, and storage.
+ * Parameters: None
+ */
 void enrollFingerprint() {
   int id = 1;
   
@@ -762,6 +857,17 @@ void enrollFingerprint() {
   totalFingerprints = getTemplateCount();
 }
 
+/**
+ * deleteByID() - Delete an enrolled fingerprint from the sensor database
+ * 
+ * Purpose: Allows user to select a fingerprint ID using UP/DOWN buttons,
+ * then deletes that fingerprint from the sensor memory. Also removes the ID
+ * from EEPROM voting tracking. Provides user feedback on deletion success.
+ * 
+ * Usage: Called when user presses DELETE button from main menu. Handles ID
+ * selection and deletion workflow.
+ * Parameters: None
+ */
 void deleteByID() {
   int id = 1;
   
@@ -833,6 +939,17 @@ void deleteByID() {
   totalFingerprints = getTemplateCount();
 }
 
+/**
+ * waitForFinger() - Wait for fingerprint sensor to detect a finger
+ * 
+ * Purpose: Continuously attempts to capture a fingerprint image from the sensor
+ * within a specified timeout period. Returns true if finger detected, false if timeout.
+ * Essential for all fingerprint capture operations.
+ * 
+ * Usage: Called before any fingerprint processing (enrollment, verification).
+ * Parameters: timeoutSeconds (int) - Maximum seconds to wait for finger presence
+ * Returns: bool - True if finger detected and image captured, false if timeout
+ */
 bool waitForFinger(int timeoutSeconds) {
   int timeout = timeoutSeconds * 10;
   
@@ -858,6 +975,17 @@ bool waitForFinger(int timeoutSeconds) {
   return false;
 }
 
+/**
+ * checkFinger() - Check if a finger is currently on the sensor
+ * 
+ * Purpose: Performs a quick check to detect if a finger is present on the sensor.
+ * Used to verify when user removes finger during enrollment and to check for
+ * ongoing finger contact. Returns immediately with current status.
+ * 
+ * Usage: Called during enrollment to verify finger removal and during voting.
+ * Parameters: None
+ * Returns: bool - True if finger detected on sensor, false otherwise
+ */
 bool checkFinger() {
   while (fingerSerial.available()) fingerSerial.read();
   
@@ -870,6 +998,18 @@ bool checkFinger() {
   return (len >= 12 && response[9] == 0x00);
 }
 
+/**
+ * imageToTemplate() - Convert fingerprint image to template format
+ * 
+ * Purpose: Processes the previously captured fingerprint image and converts it
+ * to a template that can be used for matching or storage. Templates are smaller
+ * and more efficient than raw images. Can store in buffer 1 or 2.
+ * Displays error messages if image quality is insufficient.
+ * 
+ * Usage: Called after successful finger detection to process the captured image.
+ * Parameters: bufferID (uint8_t) - Template buffer (1 or 2) to store the template
+ * Returns: bool - True if template successfully created, false on error
+ */
 bool imageToTemplate(uint8_t bufferID) {
   uint8_t data[] = {bufferID};
   
@@ -912,6 +1052,17 @@ bool imageToTemplate(uint8_t bufferID) {
   return false;
 }
 
+/**
+ * createModel() - Combine two fingerprint templates into a single model
+ * 
+ * Purpose: Takes the two template buffers (from first and second finger placements)
+ * and creates a single fingerprint model by combining them. This matching ensures
+ * the same finger was placed twice during enrollment.
+ * 
+ * Usage: Called during enrollment after both templates are created.
+ * Parameters: None
+ * Returns: bool - True if model successfully created, false on mismatch or error
+ */
 bool createModel() {
   sendCommand(CREATE_MODEL, NULL, 0);
   delay(200);
@@ -922,6 +1073,17 @@ bool createModel() {
   return (len >= 12 && response[9] == 0x00);
 }
 
+/**
+ * storeModel() - Store the fingerprint model in sensor memory
+ * 
+ * Purpose: Writes the created fingerprint model to the sensor's internal storage
+ * at the specified ID location. Once stored, the fingerprint can be used for
+ * matching and searching. This is the final step of enrollment.
+ * 
+ * Usage: Called during enrollment after model is successfully created.
+ * Parameters: id (int) - The ID to store the fingerprint model at (1-25)
+ * Returns: bool - True if model stored successfully, false on storage error
+ */
 bool storeModel(int id) {
   uint8_t data[] = {0x01, (uint8_t)(id >> 8), (uint8_t)(id & 0xFF)};
   sendCommand(STORE_MODEL, data, 3);
@@ -933,6 +1095,17 @@ bool storeModel(int id) {
   return (len >= 12 && response[9] == 0x00);
 }
 
+/**
+ * verifyPassword() - Verify sensor communication with default password
+ * 
+ * Purpose: Sends default password (0x00000000) to fingerprint sensor to verify
+ * that communication is properly established and the sensor is responsive.
+ * Used during startup to verify sensor is functional before proceeding.
+ * 
+ * Usage: Called during setup() to test sensor connectivity.
+ * Parameters: None
+ * Returns: bool - True if sensor responds correctly, false if communication fails
+ */
 bool verifyPassword() {
   uint8_t data[] = {0x00, 0x00, 0x00, 0x00};
   sendCommand(VERIFY_PASSWORD, data, 4);
@@ -944,6 +1117,16 @@ bool verifyPassword() {
   return (len >= 12 && response[9] == 0x00);
 }
 
+/**
+ * getTemplateCount() - Query sensor for number of enrolled fingerprints
+ * 
+ * Purpose: Requests the fingerprint sensor to return the count of currently stored
+ * fingerprint templates. Used to update UI and track enrollment status.
+ * 
+ * Usage: Called during setup and after enrollment/deletion operations.
+ * Parameters: None
+ * Returns: int - Number of fingerprints currently stored in sensor (0-25)
+ */
 int getTemplateCount() {
   sendCommand(GET_TEMPLATE_COUNT, NULL, 0);
   delay(100);
@@ -957,6 +1140,19 @@ int getTemplateCount() {
   return 0;
 }
 
+/**
+ * sendCommand() - Send a formatted command packet to the fingerprint sensor
+ * 
+ * Purpose: Constructs a properly formatted command packet with header, packet ID,
+ * command code, data, and checksum according to R307 sensor protocol. Sends the
+ * complete packet via SoftwareSerial to the fingerprint sensor.
+ * 
+ * Usage: Called before every sensor operation to transmit commands.
+ * Parameters: 
+ *   - cmd (uint8_t): Command code (GET_IMAGE, IMAGE_TO_TZ, SEARCH, etc.)
+ *   - data (uint8_t*): Pointer to command data array (NULL if no data)
+ *   - dataLen (int): Length of data array
+ */
 void sendCommand(uint8_t cmd, uint8_t *data, int dataLen) {
   while (fingerSerial.available()) fingerSerial.read();
   
@@ -989,6 +1185,19 @@ void sendCommand(uint8_t cmd, uint8_t *data, int dataLen) {
   fingerSerial.write(packet, idx);
 }
 
+/**
+ * readResponse() - Read response packet from fingerprint sensor
+ * 
+ * Purpose: Reads incoming data from the sensor via SoftwareSerial into a buffer.
+ * Waits up to the specified timeout period for response data. Returns the number
+ * of bytes read. Used after every command to retrieve sensor responses.
+ * 
+ * Usage: Called after each sendCommand() to receive the sensor's response.
+ * Parameters:
+ *   - buffer (uint8_t*): Array to store received response data
+ *   - timeout (int): Maximum milliseconds to wait for response data
+ * Returns: int - Number of bytes received in buffer
+ */
 int readResponse(uint8_t *buffer, int timeout) {
   unsigned long startTime = millis();
   int idx = 0;
